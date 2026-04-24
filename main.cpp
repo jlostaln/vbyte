@@ -22,7 +22,26 @@ Help instructions to be added.
 }
 
 template <class query_sturcure, bool debug = false, bool sorted = false, bool timing = false>
-void run_ops(query_sturcure& qs, std::istream& in) {
+void run_ops(query_sturcure& qs, std::istream& in, uint64_t n) {
+    uint64_t value;
+
+    for (int i = 0; i < n; i++) {
+        in.read(reinterpret_cast<char*>(&value), sizeof(value));
+        qs.VByteEncode(value);
+
+        if constexpr (debug) std::cerr << "Set i:th value: " << value
+                                       << "\nMemory in bits: " << qs.memory_in_bits() 
+                                       << "\nCount: " << qs.count()
+                                       << "\nSize: " << qs.size() << std::endl;
+    }
+
+    int count = qs.count();
+    for (int i = 0; i < count; i++) {
+        value = qs.VByteDecode(i);
+
+        if constexpr (debug) std::cerr << "Get " << i << ":th value: " << value 
+                                       << "\nMemory in bits: " << qs.memory_in_bits() << std::endl;
+    }
 }
 
 template <bool debug = false, bool sorted = false, bool timing = false>
@@ -34,12 +53,14 @@ void select_operation(int bit_block_size, bool generalized, std::istream& in) {
     if constexpr (debug) 
         std::cout << "Debug: " << debug << std::endl
         << "Sorted: " << sorted << std::endl
+        << "Time: " << timing << std::endl
         << "Bit block size: " << bit_block_size << std::endl
         << "Generalized: " << generalized << std::endl
-        << "Time: " << timing << std::endl
+        << "n: " << n << std::endl
         << std::endl;
-    pfp::VByte<uint64_t> vb(n);
-    run_ops<pfp::VByte<uint64_t>, debug, sorted, timing>(vb, in);
+
+    pfp::VByte<uint64_t> vb(n, bit_block_size);
+    run_ops<pfp::VByte<uint64_t>, debug, sorted, timing>(vb, in, n);
 
 }
 
