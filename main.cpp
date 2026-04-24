@@ -25,22 +25,35 @@ template <class query_sturcure, bool debug = false, bool sorted = false, bool ti
 void run_ops(query_sturcure& qs, std::istream& in, uint64_t n) {
     uint64_t value;
 
-    for (int i = 0; i < n; i++) {
-        in.read(reinterpret_cast<char*>(&value), sizeof(value));
-        qs.VByteEncode(value);
+    if constexpr (sorted) {
+        uint64_t temp;
+        in.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+        qs.set_first(temp);
+        for (int i = 1; i < n; i++) {
+            in.read(reinterpret_cast<char*>(&value), sizeof(value));
+            qs.VByteEncode(value-temp);
 
-        if constexpr (debug) std::cerr << "Set i:th value: " << value
-                                       << "\nMemory in bits: " << qs.memory_in_bits() 
-                                       << "\nCount: " << qs.count()
-                                       << "\nSize: " << qs.size() << std::endl;
-    }
+            if constexpr (debug) std::cerr << "Set i:th difference: " << value - temp
+                                           << "\nMemory in bits: " << qs.memory_in_bits() 
+                                           << "\nCount: " << qs.count()
+                                           << "\nSize: " << qs.size() << std::endl;
+        }
 
-    int count = qs.count();
-    for (int i = 0; i < count; i++) {
-        value = qs.VByteDecode(i);
+        std::cerr << qs.count() << std::endl;
+        qs.VByteDecodeSorted();
+    } else {
+        for (int i = 0; i < n; i++) {
+            in.read(reinterpret_cast<char*>(&value), sizeof(value));
+            qs.VByteEncode(value);
 
-        if constexpr (debug) std::cerr << "Get " << i << ":th value: " << value 
-                                       << "\nMemory in bits: " << qs.memory_in_bits() << std::endl;
+            if constexpr (debug) std::cerr << "Set i:th value: " << value
+                                           << "\nMemory in bits: " << qs.memory_in_bits() 
+                                           << "\nCount: " << qs.count()
+                                           << "\nSize: " << qs.size() << std::endl;
+        }
+
+        std::cerr << qs.count() << std::endl;
+        qs.VByteDecode();
     }
 }
 
