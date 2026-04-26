@@ -26,41 +26,67 @@ void run_ops(query_sturcure& qs, std::istream& in, uint64_t n) {
     uint64_t value;
 
     if constexpr (sorted) {
-        uint64_t temp;
-        in.read(reinterpret_cast<char*>(&temp), sizeof(temp));
-        qs.set_first(temp);
-        for (int i = 1; i < n; i++) {
-            in.read(reinterpret_cast<char*>(&value), sizeof(value));
-            qs.VByteEncode(value-temp);
+        {
+            pfp::Timer<timing> timer("Insert sorted");
+            uint64_t temp;
+            in.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+            qs.set_first(temp);
+            for (int i = 1; i < n; i++) {
+                in.read(reinterpret_cast<char*>(&value), sizeof(value));
+                qs.VByteEncode(value-temp);
 
-            if constexpr (debug) std::cerr << "Set i:th difference: " << value - temp
-                                           << "\nMemory in bits: " << qs.memory_in_bits() 
-                                           << "\nCount: " << qs.count()
-                                           << "\nSize: " << qs.size() << std::endl;
+                if constexpr (debug) std::cerr << "Set i:th difference: " << value - temp
+                                               << "\nValue: " << value 
+                                               << "\nTemp: " << temp 
+                                               << "\nMemory in bits: " << qs.memory_in_bits() 
+                                               << "\nCount: " << qs.count()
+                                               << "\nSize: " << qs.size() << std::endl;
+                temp = value;
+
+            }
         }
 
-        std::cerr << qs.count() << std::endl;
-        qs.VByteDecodeSorted();
+        std::cerr << qs.count() + 1 << std::endl;
+        {
+            pfp::Timer<timing> timer("Decode sorted");
+            qs.VByteDecodeSorted();
+        }
+
     } else {
-        for (int i = 0; i < n; i++) {
-            in.read(reinterpret_cast<char*>(&value), sizeof(value));
-            qs.VByteEncode(value);
+        {
+            pfp::Timer<timing> timer("Insert");
+            for (int i = 0; i < n; i++) {
+                in.read(reinterpret_cast<char*>(&value), sizeof(value));
+                qs.VByteEncode(value);
 
-            if constexpr (debug) std::cerr << "Set i:th value: " << value
-                                           << "\nMemory in bits: " << qs.memory_in_bits() 
-                                           << "\nCount: " << qs.count()
-                                           << "\nSize: " << qs.size() << std::endl;
+                if constexpr (debug) std::cerr << "Set i:th value: " << value
+                                               << "\nMemory in bits: " << qs.memory_in_bits() 
+                                               << "\nCount: " << qs.count()
+                                               << "\nSize: " << qs.size() << std::endl;
+            }
         }
-
         std::cerr << qs.count() << std::endl;
-        qs.VByteDecode();
+        {
+            pfp::Timer<timing> timer("Decode");
+            qs.VByteDecode();
+        }
+    }
+}
+
+template<bool timing>
+pfp::VByte<uint64_t> make_vbyte(uint64_t n, int bit_block_size) {
+    if constexpr (timing) {
+        pfp::Timer<timing> constructor_timer("Construction time");
+        return pfp::VByte<uint64_t>(n, bit_block_size);
+    } else {
+        return pfp::VByte<uint64_t>(n, bit_block_size);
     }
 }
 
 template <bool debug = false, bool sorted = false, bool timing = false>
 void select_operation(int bit_block_size, bool generalized, std::istream& in) {
     uint64_t n;
-
+    pfp::Timer<timing> t("Total time");
     in.read(reinterpret_cast<char*>(&n), sizeof(n));
 
     if constexpr (debug) 
@@ -72,7 +98,7 @@ void select_operation(int bit_block_size, bool generalized, std::istream& in) {
         << "n: " << n << std::endl
         << std::endl;
 
-    pfp::VByte<uint64_t> vb(n, bit_block_size);
+    pfp::VByte<uint64_t> vb = make_vbyte<timing>(n, bit_block_size);
     run_ops<pfp::VByte<uint64_t>, debug, sorted, timing>(vb, in, n);
 
 }

@@ -62,14 +62,15 @@ public:
         while (element < num_blocks_) {
             dtype i = get(element);
             // std::cerr << "i: " << i << std::endl;
-            val = i & ((1 << bit_block_size_) - 1);
+            val = i & ((uint64_t(1) << bit_block_size_) - 1);
             // std::cerr << "val: " << val << std::endl;
             result = val << shift | result;
             // std::cerr << "result: " << result << std::endl;
-            if (i & (1 << bit_block_size_)) {
+            if (i & (uint64_t(1) << bit_block_size_)) {
                 std::cout << result << std::endl;
                 element++;
                 result = 0;
+                shift = 0;
                 continue;
             }
             shift += bit_block_size_;
@@ -79,7 +80,7 @@ public:
 
     void VByteDecodeSorted() {
         dtype result = first_element_;
-        int sum = first_element_;
+        dtype sum = first_element_;
         int element = -1;
         int shift = 0;
         dtype val;
@@ -92,19 +93,18 @@ public:
                 continue;
             }
             dtype i = get(element);
-            if (result == 0) {
-                i += sum;
-            }
             // std::cerr << "i: " << i << std::endl;
-            val = i & ((1 << bit_block_size_) - 1);
+            val = i & ((uint64_t(1) << bit_block_size_) - 1);
             // std::cerr << "val: " << val << std::endl;
             result = val << shift | result;
             // std::cerr << "result: " << result << std::endl;
-            if (i & (1 << bit_block_size_)) {
+            if (i & (uint64_t(1) << bit_block_size_)) {
+                result += sum;
                 std::cout << result << std::endl;
                 element++;
                 sum = result;
                 result = 0;
+                shift = 0;
                 continue;
             }
             shift += bit_block_size_;
@@ -114,21 +114,32 @@ public:
 
     dtype get(int i) {
         uint64_t start_position = i * (bit_block_size_ + 1);
-        uint64_t vector_element = start_position >> divisor_shift;
+        uint64_t vector_element = start_position / num_bits_in_word_;
         uint64_t position_in_element = start_position & modulo_mask;
         uint64_t val = data_[vector_element] >> position_in_element;
+        uint64_t spill = position_in_element + (bit_block_size_ + 1);
+        if (spill > num_bits_in_word_) {
+            uint64_t spill_bits = spill - num_bits_in_word_;
+            uint64_t upper = data_[vector_element + 1] & ((uint64_t(1) << spill_bits) - 1);
+            val |= (upper << ((bit_block_size_ + 1) - spill_bits));
+        }
         return val;
     }
 
     void set(dtype val) {
         uint64_t start_position = num_blocks_ * (bit_block_size_ + 1);
-        uint64_t vector_element = start_position >> divisor_shift;
-        uint64_t block = start_position >> __builtin_ctzll(bit_block_size_ + 1);
+        uint64_t vector_element = start_position / num_bits_in_word_;
+        // uint64_t block = start_position >> __builtin_ctzll(bit_block_size_ + 1);
         uint64_t position_in_element = start_position & modulo_mask;
         data_[vector_element] &= ~(mask << position_in_element);
         data_[vector_element] |= (val << position_in_element);
-
-        // std::cerr << "push_back value: " << val << std::endl;
+        uint64_t spill = position_in_element + (bit_block_size_ + 1);
+        if (spill > num_bits_in_word_) {
+            uint64_t spill_bits = spill - num_bits_in_word_;
+            uint64_t spill_mask = (uint64_t(1) << spill_bits) - 1;
+            data_[vector_element + 1] &= ~spill_mask;
+            data_[vector_element + 1] |= (val >> ((bit_block_size_ + 1) - spill_bits));
+        }
         num_blocks_++;
     }
 
