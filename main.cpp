@@ -12,6 +12,7 @@ struct Config {
     bool timing = false;
     bool sorted = false;
     bool generalized = false;
+    bool index_query = false;
     int bit_block_size = 7;
 };
 
@@ -21,8 +22,8 @@ Help instructions to be added.
     )" << std::endl;
 }
 
-template <class query_sturcure, bool debug = false, bool sorted = false, bool timing = false>
-void run_ops(query_sturcure& qs, std::istream& in, uint64_t n) {
+template <class query_structure, bool debug = false, bool sorted = false, bool timing = false>
+void run_ops(query_structure& qs, std::istream& in, uint64_t n, bool index_query) {
     uint64_t value;
 
     if constexpr (sorted) {
@@ -47,9 +48,23 @@ void run_ops(query_sturcure& qs, std::istream& in, uint64_t n) {
         }
 
         std::cerr << qs.count() + 1 << std::endl;
-        {
-            pfp::Timer<timing> timer("Decode sorted");
-            qs.VByteDecodeSorted();
+
+        if (index_query)  {
+            {
+                uint64_t q;
+                in.read(reinterpret_cast<char*>(&q), sizeof(q));
+
+                pfp::Timer<timing> timer("Index query from sorted");
+                for (size_t i = 0; i < q; i++) {
+                    in.read(reinterpret_cast<char*>(&value), sizeof(value));
+                    std::cout << qs.VByteDecodeSorted(value) << std::endl;
+                }
+            }
+        } else {
+            {
+                pfp::Timer<timing> timer("Decode sorted");
+                qs.VByteDecodeSorted();
+            }
         }
 
     } else {
@@ -66,9 +81,24 @@ void run_ops(query_sturcure& qs, std::istream& in, uint64_t n) {
             }
         }
         std::cerr << qs.count() << std::endl;
-        {
-            pfp::Timer<timing> timer("Decode");
-            qs.VByteDecode();
+
+        if (index_query) {
+            {
+                uint64_t q;
+                in.read(reinterpret_cast<char*>(&q), sizeof(q));
+
+                pfp::Timer<timing> timer("Index query");
+                for (size_t i = 0; i < q; i++) {
+                    in.read(reinterpret_cast<char*>(&value), sizeof(value));
+                    std::cout << qs.VByteDecode(value) << std::endl;
+                }
+            }
+
+        } else {
+            {
+                pfp::Timer<timing> timer("Decode");
+                qs.VByteDecode();
+            }
         }
     }
 }
@@ -84,7 +114,7 @@ pfp::VByte<uint64_t> make_vbyte(uint64_t n, int bit_block_size) {
 }
 
 template <bool debug = false, bool sorted = false, bool timing = false>
-void select_operation(int bit_block_size, bool generalized, std::istream& in) {
+void select_operation(Config& cfg, std::istream& in) {
     uint64_t n;
     pfp::Timer<timing> t("Total time");
     in.read(reinterpret_cast<char*>(&n), sizeof(n));
@@ -93,13 +123,14 @@ void select_operation(int bit_block_size, bool generalized, std::istream& in) {
         std::cout << "Debug: " << debug << std::endl
         << "Sorted: " << sorted << std::endl
         << "Time: " << timing << std::endl
-        << "Bit block size: " << bit_block_size << std::endl
-        << "Generalized: " << generalized << std::endl
+        << "Bit block size: " << cfg.bit_block_size << std::endl
+        << "Generalized: " << cfg.generalized << std::endl
+        << "Index queries: " << cfg.index_query << std::endl
         << "n: " << n << std::endl
         << std::endl;
 
-    pfp::VByte<uint64_t> vb = make_vbyte<timing>(n, bit_block_size);
-    run_ops<pfp::VByte<uint64_t>, debug, sorted, timing>(vb, in, n);
+    pfp::VByte<uint64_t> vb = make_vbyte<timing>(n, cfg.bit_block_size);
+    run_ops<pfp::VByte<uint64_t>, debug, sorted, timing>(vb, in, n, cfg.index_query);
 
 }
 
@@ -107,15 +138,15 @@ template <bool timing = false>
 void run_program(Config& cfg, std::istream& in) {
     if (cfg.debug) {
         if (cfg.sorted) {
-            select_operation<true, true, timing>(cfg.bit_block_size, cfg.generalized, in);
+            select_operation<true, true, timing>(cfg, in);
         } else {
-            select_operation<true, false, timing>(cfg.bit_block_size, cfg.generalized, in);
+            select_operation<true, false, timing>(cfg, in);
         }
     } else {
         if (cfg.sorted) {
-            select_operation<false, true, timing>(cfg.bit_block_size, cfg.generalized, in);
+            select_operation<false, true, timing>(cfg, in);
         } else {
-            select_operation<false, false, timing>(cfg.bit_block_size, cfg.generalized, in);
+            select_operation<false, false, timing>(cfg, in);
         }
     }
 
@@ -133,6 +164,8 @@ int main(int argc, char const* argv[]) {
         } else if (s.compare("-k") == 0) {
             cfg.generalized = true;
             cfg.bit_block_size = std::stoull(argv[i++]);
+        } else if (s.compare("-n") == 0) {
+            cfg.index_query = true;
         } else if (s.compare("-h") == 0) {
             help();
             exit(0);

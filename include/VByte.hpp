@@ -18,6 +18,7 @@ private:
     int num_encoded_values_ = 0;
     int first_element_ = 0;
     std::vector<dtype> data_;
+    std::vector<uint64_t> start_block_;
 
     uint64_t mask;
     int modulo_mask;
@@ -39,8 +40,10 @@ public:
     }
 
     void VByteEncode(dtype i) {
+        start_block_.push_back(num_blocks_);
         while (true) {
             uint64_t b = i & (bit_block_limit_ - 1);
+            // uint64_t b = i % bit_block_limit_;
             if (i < bit_block_limit_) {
                 // std::cerr << "value " << i << " < " << bit_block_limit_ << " -> " << b+(bit_block_limit_)
                     // << "( " << b << " + " << bit_block_limit_ << " )" << std::endl; 
@@ -72,6 +75,26 @@ public:
                 result = 0;
                 shift = 0;
                 continue;
+            }
+            shift += bit_block_size_;
+            element++;
+        }
+    }
+
+    dtype VByteDecode(int idx) {
+        dtype result = 0;
+        int element = start_block_[idx];
+        int shift = 0;
+        dtype val;
+        while (element < num_blocks_) {
+            dtype i = get(element);
+            // std::cerr << "i: " << i << std::endl;
+            val = i & ((uint64_t(1) << bit_block_size_) - 1);
+            // std::cerr << "val: " << val << std::endl;
+            result = val << shift | result;
+            // std::cerr << "result: " << result << std::endl;
+            if (i & (uint64_t(1) << bit_block_size_)) {
+                return result;
             }
             shift += bit_block_size_;
             element++;
@@ -112,6 +135,41 @@ public:
         }
     }
 
+    dtype VByteDecodeSorted(int idx) {
+        dtype result = 0;
+        dtype sum = first_element_;
+        int counter = 0;
+        int element = 0;
+        int shift = 0;
+        dtype val;
+        if (idx == 0) {
+            return first_element_;
+        }
+        while (element < num_blocks_) {
+            // std::cerr << "Element: " << element << " result: " << result << " at the start of loop" << std::endl;
+            dtype i = get(element);
+            // std::cerr << "i: " << i << std::endl;
+            val = i & ((uint64_t(1) << bit_block_size_) - 1);
+            // std::cerr << "val: " << val << std::endl;
+            result = val << shift | result;
+            // std::cerr << "result: " << result << std::endl;
+            if (i & (uint64_t(1) << bit_block_size_)) {
+                result += sum;
+                if (counter == idx) {
+                    return result;
+                }
+                element++;
+                sum = result;
+                result = 0;
+                shift = 0;
+                counter++;
+                continue;
+            }
+            shift += bit_block_size_;
+            element++;
+        }
+    }
+
     dtype get(int i) {
         uint64_t start_position = i * (bit_block_size_ + 1);
         uint64_t vector_element = start_position / num_bits_in_word_;
@@ -141,6 +199,11 @@ public:
             data_[vector_element + 1] |= (val >> ((bit_block_size_ + 1) - spill_bits));
         }
         num_blocks_++;
+    }
+
+    dtype query(dtype i) {
+
+
     }
 
     int count() {
