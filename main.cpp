@@ -4,6 +4,7 @@
 #include <ostream>
 #include <string>
 
+#include "include/NewVByte.hpp"
 #include "include/VByte.hpp"
 #include "include/timer.hpp"
 
@@ -103,6 +104,42 @@ void run_ops(query_structure& qs, std::istream& in, uint64_t n, bool index_query
     }
 }
 
+template <class query_structure, bool debug = false, bool timing = false>
+void run_query_ops(query_structure& qs, std::istream& in, uint64_t n) {
+    uint64_t value;
+
+    {
+        pfp::Timer<timing> timer("Insert");
+        for (int i = 0; i < n; i++) {
+            in.read(reinterpret_cast<char*>(&value), sizeof(value));
+            qs.VByteEncode(value);
+
+            // if constexpr (debug) std::cerr << "Set i:th value: " << value
+            //                                << "\nMemory in bits: " << qs.memory_in_bits() 
+            //                                << "\nCount: " << qs.count()
+            //                                << "\nSize: " << qs.size() << std::endl;
+        }
+    }
+
+    // std::cerr << "After insert" << std::endl;
+    qs.precompute();
+    // std::cerr << qs.count() << std::endl;
+    // std::cerr << "After precompute" << std::endl;
+    uint64_t q;
+    in.read(reinterpret_cast<char*>(&q), sizeof(q));
+
+    {
+        pfp::Timer<timing> timer("Index query");
+        for (size_t i = 0; i < q; i++) {
+            // std::cerr << "inside query: " << i << std::endl;
+
+            in.read(reinterpret_cast<char*>(&value), sizeof(value));
+            std::cout << qs.VByteDecode(value) << std::endl;
+        }
+    }
+}
+
+
 template<bool timing>
 pfp::VByte<uint64_t> make_vbyte(uint64_t n, int bit_block_size) {
     if constexpr (timing) {
@@ -129,8 +166,13 @@ void select_operation(Config& cfg, std::istream& in) {
         << "n: " << n << std::endl
         << std::endl;
 
-    pfp::VByte<uint64_t> vb = make_vbyte<timing>(n, cfg.bit_block_size);
-    run_ops<pfp::VByte<uint64_t>, debug, sorted, timing>(vb, in, n, cfg.index_query);
+    if (!cfg.index_query) {
+        pfp::VByte<uint64_t> vb = make_vbyte<timing>(n, cfg.bit_block_size);
+        run_ops<pfp::VByte<uint64_t>, debug, sorted, timing>(vb, in, n, cfg.index_query);
+    } else {
+        pfp::NewVByte<uint64_t> nb(n, cfg.bit_block_size);
+        run_query_ops<pfp::NewVByte<uint64_t>, debug, timing>(nb, in, n);
+    }
 
 }
 
@@ -165,6 +207,8 @@ int main(int argc, char const* argv[]) {
             cfg.generalized = true;
             cfg.bit_block_size = std::stoull(argv[i++]);
         } else if (s.compare("-n") == 0) {
+            cfg.index_query = true;
+        } else if (s.compare("-q") == 0) {
             cfg.index_query = true;
         } else if (s.compare("-h") == 0) {
             help();

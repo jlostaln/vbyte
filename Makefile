@@ -15,7 +15,7 @@ CPPFLAGS = -std=c++2a -Wall -Wextra -Wshadow -pedantic -march=native
 # Environment variable containing the names of headers that will be used
 # with most executables. Without this, make will not know to recompile
 # binaries when headers change.
-HEADERS = include/VByte.hpp include/timer.hpp
+HEADERS = include/VByte.hpp include/timer.hpp include/NewVByte.hpp
 
 # A fake rule that tells make to not expect to actually create files 
 # called "clean" or "debug".
